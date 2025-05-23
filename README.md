@@ -1,6 +1,11 @@
 # Terminal Troubleshooter
 
 ## Project Description
+![Screenshot 2025-05-23 183309](https://github.com/user-attachments/assets/194d112d-0352-4241-a716-091396523948)
+![Screenshot (23)](https://github.com/user-attachments/assets/cacfbc01-4481-4c29-ae35-4908549c055b)
+![Screenshot 2025-05-23 183636](https://github.com/user-attachments/assets/5d117f6b-df9a-4916-8199-c373cb309328)
+
+
 
 **Terminal Troubleshooter is a unique interactive, text-based game that transforms practical IT troubleshooting into an engaging challenge. Step into the role of a junior sysadmin and master Linux, Docker, and Kubernetes commands by solving real-world system failures in a simulated terminal environment.**
 
