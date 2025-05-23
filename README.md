@@ -31,10 +31,8 @@ To run Terminal Troubleshooter, you'll need **Python 3.9+** installed on your sy
 1.  **Clone the Repository (or download the project files):**
 
     ```
-    git clone [https://github.com/your_username/terminal_troubleshooter.git](https://github.com/your_username/terminal_troubleshooter.git)
+    git clone [https://github.com/Hritikraj8804/terminal_troubleshooter.git](https://github.com/Hritikraj8804/terminal_troubleshooter.git)
     cd terminal_troubleshooter
-
-
     ```
 
     (If you downloaded, just navigate to the `terminal_troubleshooter` directory.)
@@ -44,8 +42,6 @@ To run Terminal Troubleshooter, you'll need **Python 3.9+** installed on your sy
 
     ```
     python -m venv venv
-
-
     ```
 
 3.  **Activate the Virtual Environment:**
@@ -54,16 +50,12 @@ To run Terminal Troubleshooter, you'll need **Python 3.9+** installed on your sy
 
         ```
         .\venv\Scripts\activate
-
-
         ```
 
     * **On macOS/Linux:**
 
         ```
         source venv/bin/activate
-
-
         ```
 
 4.  **Install Dependencies:**
@@ -71,15 +63,13 @@ To run Terminal Troubleshooter, you'll need **Python 3.9+** installed on your sy
 
     ```
     pip install -r requirements.txt
-
-
     ```
 
 ## How to Run the Game
 
 Once you've completed the installation steps and activated your virtual environment, you can start the game from the root of the `terminal_troubleshooter` directory:
 ```bash
-    python -m game.main
+python -m game.main
 ```
 The game will launch directly in your terminal. Follow the on-screen instructions and type commands at the prompt.
 
