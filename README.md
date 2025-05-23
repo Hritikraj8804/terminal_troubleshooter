@@ -31,7 +31,7 @@ To run Terminal Troubleshooter, you'll need **Python 3.9+** installed on your sy
 1.  **Clone the Repository (or download the project files):**
 
     ```
-    git clone [https://github.com/Hritikraj8804/terminal_troubleshooter.git](https://github.com/Hritikraj8804/terminal_troubleshooter.git)
+    git clone https://github.com/Hritikraj8804/terminal_troubleshooter.git
     cd terminal_troubleshooter
     ```
 
@@ -73,8 +73,9 @@ python -m game.main
 ```
 The game will launch directly in your terminal. Follow the on-screen instructions and type commands at the prompt.
 
+## Project Structure
 
-
+The project is organized into a Python package for modularity and maintainability:
 
 ```bash
 terminal_troubleshooter/
@@ -95,3 +96,51 @@ terminal_troubleshooter/
 ├── requirements.txt          # Lists Python dependencies (e.g., rich)
 └── README.md                 # Project description, how to run, usage instructions
 ```
+
+## Extending the Game / Contributing
+
+Want to expand Terminal Troubleshooter? The game's modular design makes it easy to contribute by adding new levels, implementing more commands, or enhancing existing simulations!
+
+### Adding New Levels:
+
+1.  Open `game/data/levels.py`.
+
+2.  Add a new dictionary to the `LEVELS` list, following the existing structure.
+
+3.  Define the `id`, `title`, `description`, `steps` (with `task`, `expected_commands`, `on_success`, and `hint_on_fail`).
+
+4.  Crucially, think about what **state changes** (`state_changes`) are needed in `game_state.py` to reflect the resolution of the problem.
+
+5.  Consider if you need to provide specific `simulated_output_overrides` for commands in this level.
+
+### Implementing New Commands / Enhancing Existing Ones:
+
+1.  Open `game/command_parser.py`.
+
+2.  **For new commands:**
+
+    * Add a new `elif cmd == "your_new_command":` block in the `parse_and_execute` method.
+
+    * Create a new private method `_handle_your_new_command(self, args: list[str])` to encapsulate its logic.
+
+    * Implement the simulation within this new method, manipulating `self.game_state` as needed and returning a dictionary with `output`, `success`, and `message`.
+
+3.  **For existing commands:**
+
+    * Modify the relevant `_handle_command` method (e.g., `_handle_ls`, `_handle_docker`) to add support for new arguments, more detailed output, or specific error messages.
+
+### Enhancing `game_state.py`:
+
+* You can add more simulated resources to `GameState` (e.g., network interfaces, users, more complex log files, resource utilization metrics).
+
+* Implement new methods to update these resources, which can then be called by `CommandParser` or `LevelManager`.
+
+## License
+
+This project is open-source.
+
+## Acknowledgements
+
+* Developed with Python.
+
+* Powered by the [Rich](https://github.com/Textualize/rich) library for beautiful terminal output.
