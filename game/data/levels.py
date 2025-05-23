@@ -72,6 +72,55 @@ LEVELS = [
                 }
             }
         ]
+    },
+    {
+        "id": "level_03_kubernetes_pending_pod",
+        "title": "Kubernetes Pod Stuck!",
+        "description": (
+            "A critical backend service pod in your Kubernetes cluster is stuck in a 'Pending' state. "
+            "This is affecting user logins. Diagnose why the pod isn't starting and fix it."
+        ),
+        "steps": [
+            {
+                "task": "First, list all pods to confirm the status. Then, describe the problematic pod to find the root cause.",
+                "expected_commands": [
+                    {"command": "kubectl get pods", "check_type": "contains"},
+                    {"command": "kubectl describe pod backend-efgh-67890", "check_type": "exact", "required_output_match": "Insufficient cpu"} # This is the key check!
+                ],
+                "on_success": {
+                    "message": "Excellent! You found the 'Insufficient cpu' error. Now, scale up the backend deployment to add more resources.",
+                    "xp_reward": 40,
+                    "state_changes": [], # No state change until scaling
+                    "simulated_output_overrides": {
+                        "kubectl get pods": ( # Override default parser output for clarity
+                            "NAME                             READY   STATUS    RESTARTS   AGE\n"
+                            "frontend-abcd-12345              1/1     Running   0          2h\n"
+                            "backend-efgh-67890               0/1     [yellow]Pending[/]   0          2h\n" # Highlight pending
+                            "nginx-app-xyz-54321              1/1     Running   0          2d"
+                        )
+                    },
+                    "hint_on_fail": "Use 'kubectl get pods' to see all pods, then 'kubectl describe pod <pod_name>' for details."
+                }
+            },
+            {
+                "task": "You've identified the CPU issue. Scale the 'backend' deployment to 2 replicas to resolve the resource constraint.",
+                "expected_commands": [
+                    {"command": "kubectl scale deployment backend --replicas=2", "check_type": "exact"}
+                ],
+                "on_success": {
+                    "message": "Success! The backend deployment was scaled, and the pod is now running!",
+                    "xp_reward": 80,
+                    "state_changes": [
+                        {"type": "k8s_scale_deployment", "deployment_name": "backend", "replicas": 2},
+                        {"type": "k8s_pod_status", "pod_name": "backend-efgh-67890", "new_status": "Running"} # Pod should now be running
+                    ],
+                    "simulated_output_overrides": {
+                        "kubectl scale deployment backend --replicas=2": "deployment.apps/backend scaled"
+                    },
+                    "hint_on_fail": "To scale a Kubernetes deployment, use 'kubectl scale deployment <name> --replicas=<count>'."
+                }
+            }
+        ]
     }
     # Add more levels here...
 ]

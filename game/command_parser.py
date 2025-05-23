@@ -92,21 +92,41 @@ class CommandParser:
                 return None # Path not found
         return current_node
 
-    def _handle_ls(self, args: List[str]) -> Dict[str, Any]:
-        path = args[0] if args and not args[0].startswith('-') else '/'
+    def _handle_ls(self, args: list[str]) -> dict[str, Any]:
+        path = '/'
+        long_format = False
+        
+        # Parse arguments
+        for arg in args:
+            if arg.startswith('-'):
+                if 'l' in arg:
+                    long_format = True
+            else:
+                path = arg # Assume the last non-flag arg is the path
+
         target_node = self._traverse_path(self._get_path_parts(path))
 
         if target_node is None:
             return {"output": f"ls: cannot access '{path}': No such file or directory", "success": False}
         if not isinstance(target_node, dict): # It's a file, not a directory
-             return {"output": f"{path}\n", "success": True}
+            if long_format:
+                # Simulated long format for a single file
+                return {"output": f"-rw-r--r-- 1 sysadmin sysadmin 1234 May 23 10:00 {path.split('/')[-1]}\n", "success": True}
+            return {"output": f"{path.split('/')[-1]}\n", "success": True}
 
         output_lines = []
         for name, content in target_node.items():
-            if isinstance(content, dict):
-                output_lines.append(f"[blue]{name}[/]") # Directory
+            if long_format:
+                # Very basic simulated long format
+                permissions = "drwxr-xr-x" if isinstance(content, dict) else "-rw-r--r--"
+                size = "4.0K" if isinstance(content, dict) else "1.2K" # Simplified size
+                date = "May 23 10:00"
+                output_lines.append(f"{permissions} 1 sysadmin sysadmin {size:>7} {date} {name}")
             else:
-                output_lines.append(name) # File
+                if isinstance(content, dict):
+                    output_lines.append(f"[blue]{name}[/]") # Directory
+                else:
+                    output_lines.append(name) # File
         return {"output": "\n".join(output_lines), "success": True}
 
     def _handle_cd(self, args: List[str]) -> Dict[str, Any]:
