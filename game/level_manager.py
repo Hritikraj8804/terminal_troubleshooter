@@ -2,7 +2,9 @@
 
 from .game_state import GameState
 from .data.levels import LEVELS
-import re # For regular expression matching
+from .command_parser import CommandParser # Import the new parser
+import re
+from typing import Dict, Any # Add this line
 
 class LevelManager:
     """
@@ -11,6 +13,7 @@ class LevelManager:
     """
     def __init__(self, game_state: GameState):
         self.game_state = game_state
+        self.level_parser = CommandParser(game_state) # Initialize CommandParser
         self.current_level_index = self._get_level_index_by_id(game_state.current_level_id)
         if self.current_level_index is None:
             raise ValueError(f"Starting level ID '{game_state.current_level_id}' not found in LEVELS.")
@@ -40,35 +43,64 @@ class LevelManager:
         """Checks if there are no more levels to play."""
         return self.current_level_index >= len(LEVELS)
 
-    def validate_command(self, user_command: str) -> tuple[bool, dict | None]:
+    def validate_command(self, user_command: str) -> tuple[bool, Dict[str, Any]]:
         """
-        Validates if the user's command matches the expected commands for the current step.
+        Parses the user's command, executes it via CommandParser, and then
+        validates the *result* against the current level's expected commands.
         Returns (is_correct, feedback_data)
         """
         current_level = self.get_current_level_data()
         if not current_level:
-            return False, {"message": "No active level.", "type": "error"}
+            return False, {"message": "No active level.", "type": "error", "output": ""}
 
-        # For simplicity, we assume one "step" per level for now.
-        # In a more complex game, you might track current_step_index.
-        current_step = current_level["steps"][0]
+        # Step 1: Parse and execute the command via our CommandParser
+        parsed_result = self.level_parser.parse_and_execute(user_command)
+        
+        # We need to explicitly pass parsed_result's output to the game.
+        # This allows us to use dynamic simulated output from the parser.
+        output_from_parser = parsed_result.get("output", "")
+        message_from_parser = parsed_result.get("message", "")
+        
+        # Step 2: Validate the result against the level's expected commands
+        current_step = current_level["steps"][0] # Assuming one step per level for simplicity
         expected_commands = current_step["expected_commands"]
-        on_success_data = current_step["on_success"]
         
-        user_command_lower = user_command.strip().lower()
+        is_level_command_match = False
+        for exp_cmd_spec in expected_commands:
+            target_cmd_parts = exp_cmd_spec["command"].strip().lower().split()
+            target_cmd_name = target_cmd_parts[0]
+            target_args_str = " ".join(target_cmd_parts[1:])
 
-        for exp_cmd in expected_commands:
-            check_type = exp_cmd["check_type"]
-            expected_cmd_val = exp_cmd["command"].lower()
+            # Check if the user's command matches one of the expected commands for THIS level
+            # We check the raw user_command, not the parsed_result, to match specific commands
+            # like "ps aux" or "systemctl restart apache2" as defined in levels.py
+            user_cmd_lower = user_command.strip().lower()
 
-            if check_type == "exact" and user_command_lower == expected_cmd_val:
-                return True, on_success_data
-            elif check_type == "contains" and expected_cmd_val in user_command_lower:
-                return True, on_success_data
-            elif check_type == "regex" and re.search(expected_cmd_val, user_command_lower):
-                return True, on_success_data
-        
-        return False, {"message": current_step.get("hint_on_fail", "That's not the right command for this task. Try again."), "type": "hint"}
+            if exp_cmd_spec["check_type"] == "exact" and user_cmd_lower == exp_cmd_spec["command"].lower():
+                is_level_command_match = True
+                break
+            elif exp_cmd_spec["check_type"] == "contains" and exp_cmd_spec["command"].lower() in user_cmd_lower:
+                is_level_command_match = True
+                break
+            elif exp_cmd_spec["check_type"] == "regex" and re.search(exp_cmd_spec["command"], user_cmd_lower):
+                is_level_command_match = True
+                break
+
+        # If the command executed successfully AND it was one of the commands expected by the level,
+        # then consider it a level success.
+        if parsed_result["success"] and is_level_command_match:
+            success_data = current_step["on_success"].copy()
+            # Override simulated_output with actual output from parser if parser produced it
+            if output_from_parser:
+                 success_data["simulated_output_from_parser"] = output_from_parser
+            if message_from_parser:
+                success_data["message"] = message_from_parser # Use parser's specific success message
+            return True, success_data
+        elif not parsed_result["success"]:
+            # Command failed at the parser level
+            return False, {"message": parsed_result.get("message", "Command failed."), "type": "error", "output": output_from_parser}
+        else: # Command was executed, but not the one the level was looking for
+            return False, {"message": current_step.get("hint_on_fail", "That's not the right command for this task. Try again."), "type": "hint", "output": output_from_parser}
 
     def apply_success_state_changes(self, success_data: dict):
         """Applies state changes to the game_state based on a successful command."""
@@ -84,7 +116,10 @@ class LevelManager:
             elif change_type == "k8s_scale_deployment":
                 self.game_state.scale_kubernetes_deployment(change["deployment_name"], change["replicas"])
             elif change_type == "add_dir":
-                self.game_state.add_directory(change["path"], change["name"])
+                # Ensure parent path exists for mkdir simulation
+                path_parts = [p for p in change["path"].strip('/').split('/') if p]
+                parent_path = "/" + "/".join(path_parts) if path_parts else "/"
+                self.game_state.add_directory(parent_path, change["name"])
             elif change_type == "delete_file":
                 self.game_state.delete_file_or_dir(change["path"])
             # Add more state change types as needed
@@ -92,29 +127,12 @@ class LevelManager:
         self.game_state.add_xp(success_data.get("xp_reward", 0))
 
     def get_simulated_output(self, command: str) -> str:
-        """Retrieves simulated output for a given command from the current level."""
-        current_level = self.get_current_level_data()
-        if current_level:
-            # We assume output is in the first step's on_success for now
-            simulated_output = current_level["steps"][0]["on_success"].get("simulated_output", {})
-            # Look for exact match first, then partial match if needed
-            if command in simulated_output:
-                return simulated_output[command]
-            
-            # Simple fallback for ps aux to show current state
-            if command == "ps aux":
-                output_lines = ["USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND"]
-                for pid, proc_data in self.game_state.processes.items():
-                    # Simplified representation
-                    state_char = proc_data['state'][0].upper() if proc_data['state'] else '?'
-                    output_lines.append(f"sysadmin  {pid:<4}  0.0  0.0 100000  5000 ?        {state_char}    10:00   0:00 {proc_data['command']}")
-                return "\n".join(output_lines)
-            
-            # Fallback for du -sh /var/log/* (after syslog is deleted)
-            if command == "du -sh /var/log/*":
-                if not self.game_state.get_file_content("/var/log/syslog"): # If syslog was deleted
-                     return (
-                        "8.0K    /var/log/auth.log\n"
-                        "4.0K    /var/log/kern.log"
-                    )
-        return "" # Default empty output
+        """
+        This method is now mostly redundant as the CommandParser handles actual output.
+        It can be kept for fallback or specific hardcoded level outputs if needed,
+        but the primary source of simulated output will be the CommandParser.
+        """
+        # The parser's output is now passed through `validate_command`
+        # and stored in `feedback_data["simulated_output_from_parser"]`.
+        # This method can return an empty string or specific overrides.
+        return "" # We'll rely on the parser's output.

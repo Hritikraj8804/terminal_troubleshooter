@@ -16,7 +16,7 @@ def game_loop():
     while not level_manager.is_game_over():
         current_level_data = level_manager.get_current_level_data()
         if not current_level_data:
-            terminal_interface.print_error("Error: Could not load current level data.")
+            terminal_interface.print_error("Error: Could not load current level data. Exiting.")
             break
 
         terminal_interface.print_scenario(
@@ -33,16 +33,17 @@ def game_loop():
             user_command = terminal_interface.get_user_input("sysadmin@server:~$ ")
 
             # Validate the command using the LevelManager
+            # feedback_data now contains 'output', 'message', 'type', and potentially 'simulated_output_from_parser'
             is_correct, feedback_data = level_manager.validate_command(user_command)
+
+            # Display the output from the simulated command execution first
+            if feedback_data.get("output"):
+                terminal_interface.print_info("Simulated output:")
+                terminal_interface.console.print(feedback_data["output"], style="dim white") # Print raw simulated output
+                time.sleep(0.5) # Short pause to read output
 
             if is_correct:
                 terminal_interface.print_success(feedback_data["message"])
-                
-                # Print simulated output for the command if available
-                simulated_output = level_manager.get_simulated_output(user_command)
-                if simulated_output:
-                    terminal_interface.print_info("Simulated output:")
-                    terminal_interface.console.print(simulated_output, style="dim cyan") # Print raw simulated output
                 
                 # Apply state changes (like process status, file deletions, etc.)
                 level_manager.apply_success_state_changes(feedback_data)
@@ -50,20 +51,20 @@ def game_loop():
                 task_solved = True # Current step is solved
                 terminal_interface.print_message(f"Current XP: {game_state.player_xp}", style="bold yellow")
                 time.sleep(2) # Give user time to read success message
-                break # Exit current command loop, proceed to next step or level
+                # No break here, allow loop to complete and then move to next level
             else:
                 attempts += 1
-                terminal_interface.print_error(f"Command '{user_command}' is not correct for this task. ({max_attempts_per_step - attempts} attempts left)")
+                error_message = feedback_data.get("message", "That's not the right command for this task. Try again.")
+                terminal_interface.print_error(f"{error_message} ({max_attempts_per_step - attempts} attempts left)")
+                # If the feedback_data has a 'type' of 'hint', it means the command was valid but not the one for the task
                 if feedback_data.get("type") == "hint":
-                    terminal_interface.print_info(feedback_data["message"])
+                    pass # Message is already a hint, no need to add "Try again" if it's specific
                 time.sleep(1)
 
         if not task_solved:
             terminal_interface.print_error("You ran out of attempts for this task. Game Over!")
-            terminal_interface.print_info("Consider reviewing the hint for the task.")
-            # For a real game, you'd end here or restart the level.
-            # For demo, let's just break out of the main loop.
-            break
+            terminal_interface.print_info("Consider reviewing the task description and hint.")
+            break # Game over if task not solved
 
         # Advance to the next level if the current task was solved
         if task_solved:
@@ -73,7 +74,7 @@ def game_loop():
                 terminal_interface.print_success("Congratulations! You've completed all available levels!")
                 break # All levels done
 
-    terminal_interface.print_section_header("Game Over")
+    terminal_interface.print_section_header("Game Over / End Demo")
     terminal_interface.print_message(f"Final XP: {game_state.player_xp}", style="bold yellow")
     terminal_interface.print_message("Thanks for playing Terminal Troubleshooter!", style="dim white")
     time.sleep(3)
