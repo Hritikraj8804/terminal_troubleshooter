@@ -1,69 +1,80 @@
-# main.py
-from . import terminal_interface # The dot means "from the current package"
+# game/main.py
+from . import terminal_interface
+from .game_state import GameState
+from .level_manager import LevelManager
 import time
 
 def game_loop():
-    """Main game loop."""
+    """Main game loop for Terminal Troubleshooter."""
+    game_state = GameState()
+    level_manager = LevelManager(game_state)
+
     terminal_interface.print_welcome_message()
     terminal_interface.print_message("Press Enter to start your sysadmin journey...", style="dim white")
     terminal_interface.get_user_input("") # Wait for user to press Enter
 
-    # --- Level 1: Web Server Down ---
-    terminal_interface.print_scenario(
-        "Urgent: Web Server Down!",
-        "The corporate website is completely unreachable. Customers are furious! "
-        "Your first task is to identify the web server process and restart it. "
-        "Start by listing all running processes to find potential issues."
-    )
+    while not level_manager.is_game_over():
+        current_level_data = level_manager.get_current_level_data()
+        if not current_level_data:
+            terminal_interface.print_error("Error: Could not load current level data.")
+            break
 
-    correct_command_found = False
-    max_attempts = 3
-    attempts = 0
-
-    while not correct_command_found and attempts < max_attempts:
-        user_command = terminal_interface.get_user_input("sysadmin@server:~$ ")
-
-        if user_command.strip().lower() == "ps aux":
-            terminal_interface.print_success("You ran 'ps aux'. Excellent! Now, simulate finding the web server process PID.")
-            terminal_interface.print_info("Simulated output:")
-            terminal_interface.print_message("USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND", style="dim cyan")
-            terminal_interface.print_message("root         1  0.0  0.1 106708  6908 ?        Ss   May20   0:01 /sbin/init", style="dim white")
-            terminal_interface.print_message("sysadmin  1234  0.5  2.0 200000 150000 ?       S    10:30   0:05 /usr/sbin/apache2 -k start", style="yellow") # The target!
-            terminal_interface.print_message("root      5678  0.0  0.1  25000  1200 ?        S    May20   0:00 /usr/bin/python3 /opt/monitoring/monitor.py", style="dim white")
-            terminal_interface.print_info("\nIt seems the apache2 process (PID 1234) is the web server. Now, restart it.")
-            correct_command_found = True
-        else:
-            attempts += 1
-            terminal_interface.print_error(f"Command '{user_command}' is not helping. Try again. ({max_attempts - attempts} attempts left)")
-            time.sleep(1)
-
-    if correct_command_found:
-        # Now, the next step in the task: restarting the service
         terminal_interface.print_scenario(
-            "Task Part 2: Restart the Web Server",
-            "You've identified the Apache web server process with PID 1234. Now, restart the Apache service."
+            f"Level {level_manager.current_level_index + 1}: {current_level_data['title']}",
+            current_level_data['description']
         )
-        restart_successful = False
+        terminal_interface.print_info(current_level_data["steps"][0]["task"]) # Display current task
+
+        task_solved = False
+        max_attempts_per_step = 5 # Give more attempts per specific command
         attempts = 0
-        while not restart_successful and attempts < max_attempts:
+
+        while not task_solved and attempts < max_attempts_per_step:
             user_command = terminal_interface.get_user_input("sysadmin@server:~$ ")
-            if user_command.strip().lower() in ["sudo systemctl restart apache2", "systemctl restart apache2"]:
-                terminal_interface.print_success("Service 'apache2' restarted successfully! The website is back online!")
-                terminal_interface.print_message("You earned 50 XP!", style="bold yellow")
-                restart_successful = True
+
+            # Validate the command using the LevelManager
+            is_correct, feedback_data = level_manager.validate_command(user_command)
+
+            if is_correct:
+                terminal_interface.print_success(feedback_data["message"])
+                
+                # Print simulated output for the command if available
+                simulated_output = level_manager.get_simulated_output(user_command)
+                if simulated_output:
+                    terminal_interface.print_info("Simulated output:")
+                    terminal_interface.console.print(simulated_output, style="dim cyan") # Print raw simulated output
+                
+                # Apply state changes (like process status, file deletions, etc.)
+                level_manager.apply_success_state_changes(feedback_data)
+                
+                task_solved = True # Current step is solved
+                terminal_interface.print_message(f"Current XP: {game_state.player_xp}", style="bold yellow")
+                time.sleep(2) # Give user time to read success message
+                break # Exit current command loop, proceed to next step or level
             else:
                 attempts += 1
-                terminal_interface.print_error(f"That command didn't restart Apache. Try again. ({max_attempts - attempts} attempts left)")
+                terminal_interface.print_error(f"Command '{user_command}' is not correct for this task. ({max_attempts_per_step - attempts} attempts left)")
+                if feedback_data.get("type") == "hint":
+                    terminal_interface.print_info(feedback_data["message"])
                 time.sleep(1)
-        
-        if not restart_successful:
-            terminal_interface.print_error("You failed to restart the web server. Game Over!")
-            terminal_interface.print_info("Hint: Try 'systemctl restart apache2' or 'sudo systemctl restart apache2'.")
-    else:
-        terminal_interface.print_error("You ran out of attempts. The web server remains down. Game Over!")
-        terminal_interface.print_info("Hint: The first step was 'ps aux'.")
 
-    terminal_interface.print_section_header("Game Over / Demo End")
+        if not task_solved:
+            terminal_interface.print_error("You ran out of attempts for this task. Game Over!")
+            terminal_interface.print_info("Consider reviewing the hint for the task.")
+            # For a real game, you'd end here or restart the level.
+            # For demo, let's just break out of the main loop.
+            break
+
+        # Advance to the next level if the current task was solved
+        if task_solved:
+            # We're simplifying to one step per level for now.
+            # In a full game, you'd have a mechanism to check if all steps in a level are done.
+            if not level_manager.advance_level():
+                terminal_interface.print_success("Congratulations! You've completed all available levels!")
+                break # All levels done
+
+    terminal_interface.print_section_header("Game Over")
+    terminal_interface.print_message(f"Final XP: {game_state.player_xp}", style="bold yellow")
     terminal_interface.print_message("Thanks for playing Terminal Troubleshooter!", style="dim white")
     time.sleep(3)
     terminal_interface.clear_screen()
